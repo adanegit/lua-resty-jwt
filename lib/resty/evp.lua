@@ -316,6 +316,45 @@ local function _create_evp_ctx(self, encrypt)
     return self.ctx
 end
 
+local evp_pkey_ctx_ptr_ptr_ct = ffi.typeof('EVP_PKEY_CTX*[1]')
+
+local function _create_verify_ctx(self, finit_ex, fint, md_alg)
+
+    local pkey_ctx, ppkey_ctx
+    if self.padding then
+        pkey_ctx = _C.EVP_PKEY_CTX_new(self.evp_pkey, nil)
+        if pkey_ctx == nil then
+            return nil, "pkey:_create_verify_ctx EVP_PKEY_CTX_new()"
+        end
+        ffi_gc(pkey_ctx, _C.EVP_PKEY_CTX_free)
+
+        ppkey_ctx = evp_pkey_ctx_ptr_ptr_ct()
+        ppkey_ctx[0] = pkey_ctx
+    end
+
+    local md_ctx = ctx_new()
+    if md_ctx == nil then
+        return nil, "pkey:_create_verify_ctx: EVP_MD_CTX_new() failed"
+    end
+    ctx_free(md_ctx)
+
+    if finit_ex(md_ctx, md_alg, nil) ~= 1 then
+        return nil, "pkey:_create_verify_ctx: Init_ex() failed"
+    end
+
+    if fint(md_ctx, ppkey_ctx, md_alg, nil, self.evp_pkey) ~= 1 then
+        return nil, "pkey:_create_verify_ctx: Init failed"
+    end
+
+    if ppkey_ctx and self.padding == CONST.RSA_PKCS1_PSS_PADDING then
+        if _C.EVP_PKEY_CTX_ctrl(ppkey_ctx[0], CONST.EVP_PKEY_RSA, -1, CONST.EVP_PKEY_CTRL_RSA_PADDING, self.padding, nil) <= 0 then
+            return nil, "pkey:_create_verify_ctx: EVP_PKEY_CTX_ctrl() failed"
+        end
+    end
+
+    return md_ctx
+end
+
 local RSASigner = {algo="RSA"}
 _M.RSASigner = RSASigner
 
@@ -438,12 +477,13 @@ _M.RSAVerifier = RSAVerifier
 --- Create a new RSAVerifier
 -- @param key_source An instance of Cert or PublicKey used for verification
 -- @returns RSAVerifier, error_string
-function RSAVerifier.new(self, key_source)
+function RSAVerifier.new(self, key_source, padding)
     if not key_source then
         return nil, "You must pass in an key_source for a public key"
     end
     local evp_public_key = key_source.public_key
     self.evp_pkey = evp_public_key
+    self.padding = padding
     return self, nil
 end
 
@@ -458,26 +498,17 @@ function RSAVerifier.verify(self, message, sig, digest_name)
         return _err(false)
     end
 
-    local ctx = ctx_new()
-    if ctx == nil then
-        return _err(false)
-    end
-    ctx_free(ctx)
-
-    if _C.EVP_DigestInit_ex(ctx, md, nil) ~= 1 then
+    local md_ctx, err = _create_verify_ctx(self, _C.EVP_DigestInit_ex, _C.EVP_DigestVerifyInit, md)
+    if err then
         return _err(false)
     end
 
-    local ret = _C.EVP_DigestVerifyInit(ctx, nil, md, nil, self.evp_pkey)
-    if ret ~= 1 then
-        return _err(false)
-    end
-    if _C.EVP_DigestUpdate(ctx, message, #message) ~= 1 then
+    if _C.EVP_DigestUpdate(md_ctx, message, #message) ~= 1 then
         return _err(false)
     end
     local sig_bin = ffi_new("unsigned char[?]", #sig)
     ffi_copy(sig_bin, sig, #sig)
-    if _C.EVP_DigestVerifyFinal(ctx, sig_bin, #sig) == 1 then
+    if _C.EVP_DigestVerifyFinal(md_ctx, sig_bin, #sig) == 1 then
         return true, nil
     else
         return false, "Verification failed"

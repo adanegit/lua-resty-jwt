@@ -804,3 +804,77 @@ everything is awesome~ :p
 test
 --- no_error_log
 [error]
+
+=== TEST 26: Verify valid PS256 signed jwt using a rsa public key
+--- http_config eval: $::HttpConfig
+--- config
+    location /t {
+        content_by_lua '
+            local jwt = require "resty.jwt"
+
+            local public_key = [[
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvE+myl5JR22jRgb2+pv4
+h29IH26WdenM6FsJ7Ks2nZDdSfL8S0ahp8Tk/nrC7Zi/MMUkNeZlkLFkS5mHeeyw
+v5UpGJqbP3rKnsiP/Uomt8NJufusv/HWZSpI784rGzkHy+FY5Vs/nexw9K5os/mm
+wZqjsEtxZU5kfg9Ye+VCtXW3ArXstCEu2Gd93C91NEX//g67ahAI3ii6TAsml8VA
+Qcl2+7pK6HPgAmcPECnhhfNaqEPIcdxOToAymCG3SLB54MIyN3kvOFjK0Ztj82U0
+qqibxZcAAw2yK07kz2sSF8VtM5B3mgE9DFpskezhSIRc+nuhHoyTn8pscisa2JNq
+dQIDAQAB
+-----END PUBLIC KEY-----
+                ]]
+
+            jwt:set_alg_whitelist({ PS256 = 1 })
+            local jwt_token = "eyJraWQiOiJlYWY3YzFkNS0xMzI1LTQ3NmMtOTdlYi03N2VkNGEzMDNhZTciLCJhbGciOiJQUzI1NiJ9.ew0KICAiaXNzIjogInRlc3QiLA0KICAiaWF0IjogMTUxNjIzOTAyMg0KfQ.n2i-wYB_XOTJSo7oIAVq_zxm5BGG7cfPTwo9ZD0agoJvLQy-D0btxkhaNJj7lJcAtxi3ffpYB2kHVcUa7YKNO6szNU1AC4r9iIgQn1wjgfLcmxVxnOvHt7EUwn6fVoNxNU7AX-s-1eMaAuIPxretYGvFFfc3kXJYWdfQcr_4LbtlG3EDg-WUetJ75JmzfZPW963TdUWZ17uyPf8TjwLDpJl0OyPDAvo-sh4J2ySj43VVNpEhR50tqE2FrHM6mz1d9MliNU9HbUWkEdbpLwmDrHgfpaaKyWMKCWkxiOpcxivfw9CmvrYciQg1VWYDp149yvEUOLjytZ4NXRVSbSKtnw"
+
+            local jwt_obj = jwt:verify(public_key, jwt_token)
+            ngx.say(jwt_obj["verified"])
+            ngx.say(jwt_obj["reason"])
+            ngx.say(jwt_obj["payload"]["iss"])
+        ';
+    }
+--- request
+GET /t
+--- response_body
+true
+everything is awesome~ :p
+test
+--- no_error_log
+[error]
+
+=== TEST 25: Verify valid PS512 signed jwt using a rsa public key
+--- http_config eval: $::HttpConfig
+--- config
+    location /t {
+        content_by_lua '
+            local jwt = require "resty.jwt"
+
+            local public_key = [[
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqy2xX7I8txBV5WXLebw/
+pVzbnDNQ4dbR+Cqe0VHB6H9QIztM36AN6a8WX+5er71lsSEHoz5ivTOju5INBMft
+44fD+UAdWWLtFq17PX2EGNLkO0yQSNh+nb6MCym0Q+wShyMBPWfJSPv6eU4Ixx1r
+DfyNMkZ2mhoWqAIahCI+Sz7DMJ60h4k7DRWQX9kfQbMC+0suyNolAiBOYlHdqIIC
+t6FtpnTaLDHNx5ExavD/wtcdycj3z/G+zUec4hVI5j/DUdkg/9IwkzUvC9HV4Qek
+pdWoqSSrJKHruf0nqJ15vupBgalbuRePJg7p/9XjtTPP9Tm9g99Ikwqf4eIrb/Uo
+AQIDAQAB
+-----END PUBLIC KEY-----
+                ]]
+
+            jwt:set_alg_whitelist({ PS512 = 1 })
+            local jwt_token = "eyJraWQiOiI4MTlmMmY5OS0xNDY4LTQyYmItOGIyMy00ZTkyOWUwNWJjMDQiLCJhbGciOiJQUzUxMiJ9.ew0KICAiaXNzIjogInRlc3QiLA0KICAiaWF0IjogMTUxNjIzOTAyMg0KfQ.hHoWVr_Slu1xpe4ehqsvmeIqsKxJVS6MLV-58rw08zQvhIVjzoUjRr5QkdakxA_0NF6ubJUztprxfclFfBNO1tLAMv1BLujXdSTgWDxG9Vr4hhDRIJY53xrUY6ozIPBsZKYPRJQjoOMk3EotI8vPRNYyj778EmwT3nNr1W9kRjpKa9lKmcAIwSDeYN_7BrvJk7oqpRyQDfEkcOaEsVwgvgz2lGMzoA-6NXzLplG6JC8I7Ncq3ympV80e0TZ3YnNR_74If_yIh57M0EOl8c4C0YWGNaFTFXw18zpRgHS6svqpZ3LNXM8O-yBPaixfV1Dr9qJvA6Q_u8okDY618S_iqw"
+
+            local jwt_obj = jwt:verify(public_key, jwt_token)
+            ngx.say(jwt_obj["verified"])
+            ngx.say(jwt_obj["reason"])
+            ngx.say(jwt_obj["payload"]["iss"])
+        ';
+    }
+--- request
+GET /t
+--- response_body
+true
+everything is awesome~ :p
+test
+--- no_error_log
+[error]
