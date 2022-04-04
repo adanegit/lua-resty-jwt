@@ -318,13 +318,13 @@ end
 
 local evp_pkey_ctx_ptr_ptr_ct = ffi.typeof('EVP_PKEY_CTX*[1]')
 
-local function _create_verify_ctx(self, finit_ex, fint, md_alg)
+local function _create_sign_verify_ctx(self, finit_ex, fint, md_alg)
 
     local pkey_ctx, ppkey_ctx
     if self.padding then
         pkey_ctx = _C.EVP_PKEY_CTX_new(self.evp_pkey, nil)
         if pkey_ctx == nil then
-            return nil, "pkey:_create_verify_ctx EVP_PKEY_CTX_new()"
+            return nil, "pkey:_create_padded_ctx EVP_PKEY_CTX_new()"
         end
         ffi_gc(pkey_ctx, _C.EVP_PKEY_CTX_free)
 
@@ -334,21 +334,21 @@ local function _create_verify_ctx(self, finit_ex, fint, md_alg)
 
     local md_ctx = ctx_new()
     if md_ctx == nil then
-        return nil, "pkey:_create_verify_ctx: EVP_MD_CTX_new() failed"
+        return nil, "pkey:_create_padded_ctx: EVP_MD_CTX_new() failed"
     end
     ctx_free(md_ctx)
 
     if finit_ex(md_ctx, md_alg, nil) ~= 1 then
-        return nil, "pkey:_create_verify_ctx: Init_ex() failed"
+        return nil, "pkey:_create_padded_ctx: Init_ex() failed"
     end
 
     if fint(md_ctx, ppkey_ctx, md_alg, nil, self.evp_pkey) ~= 1 then
-        return nil, "pkey:_create_verify_ctx: Init failed"
+        return nil, "pkey:_create_padded_ctx: Init failed"
     end
 
     if ppkey_ctx and self.padding == CONST.RSA_PKCS1_PSS_PADDING then
         if _C.EVP_PKEY_CTX_ctrl(ppkey_ctx[0], CONST.EVP_PKEY_RSA, -1, CONST.EVP_PKEY_CTRL_RSA_PADDING, self.padding, nil) <= 0 then
-            return nil, "pkey:_create_verify_ctx: EVP_PKEY_CTX_ctrl() failed"
+            return nil, "pkey:_create_padded_ctx: EVP_PKEY_CTX_ctrl() failed"
         end
     end
 
@@ -362,7 +362,8 @@ _M.RSASigner = RSASigner
 -- @param pem_private_key A private key string in PEM format
 -- @param password password for the private key (if required)
 -- @returns RSASigner, err_string
-function RSASigner.new(self, pem_private_key, password)
+function RSASigner.new(self, pem_private_key, password, padding)
+    self.padding = padding
     return _new_key (
         self,
         {
@@ -381,29 +382,20 @@ function RSASigner.sign(self, message, digest_name)
     local buf = ffi_new("unsigned char[?]", 1024)
     local len = ffi_new("size_t[1]", 1024)
 
-    local ctx = ctx_new()
-    if ctx == nil then
-        return _err()
-    end
-    ctx_free(ctx)
-
     local md = _C.EVP_get_digestbyname(digest_name)
     if md == nil then
         return _err()
     end
 
-    if _C.EVP_DigestInit_ex(ctx, md, nil) ~= 1 then
+    local md_ctx, err = _create_sign_verify_ctx(self, _C.EVP_DigestInit_ex, _C.EVP_DigestSignInit, md)
+    if err then
         return _err()
     end
 
-    local ret = _C.EVP_DigestSignInit(ctx, nil, md, nil, self.evp_pkey)
-    if  ret ~= 1 then
-        return _err()
-    end
-    if _C.EVP_DigestUpdate(ctx, message, #message) ~= 1 then
+    if _C.EVP_DigestUpdate(md_ctx, message, #message) ~= 1 then
          return _err()
     end
-    if _C.EVP_DigestSignFinal(ctx, buf, len) ~= 1 then
+    if _C.EVP_DigestSignFinal(md_ctx, buf, len) ~= 1 then
         return _err()
     end
     return ffi_string(buf, len[0]), nil
@@ -498,7 +490,7 @@ function RSAVerifier.verify(self, message, sig, digest_name)
         return _err(false)
     end
 
-    local md_ctx, err = _create_verify_ctx(self, _C.EVP_DigestInit_ex, _C.EVP_DigestVerifyInit, md)
+    local md_ctx, err = _create_sign_verify_ctx(self, _C.EVP_DigestInit_ex, _C.EVP_DigestVerifyInit, md)
     if err then
         return _err(false)
     end

@@ -419,6 +419,8 @@ everything is awesome~ :p
 bar
 --- no_error_log
 [error]
+
+
 === TEST 13: JWT simple verify failure
 --- http_config eval: $::HttpConfig
 --- config
@@ -449,6 +451,7 @@ false
 Verification failed
 --- no_error_log
 [error] 
+
 
 === TEST 14: JWT sign and verify ES512
 --- http_config eval: $::HttpConfig
@@ -493,6 +496,7 @@ bar
 --- no_error_log
 [error]
 
+
 === TEST 15: JWT sign and verify RS512
 --- http_config eval: $::HttpConfig
 --- config
@@ -517,6 +521,159 @@ bar
                     header={
                         typ="JWT",
                         alg="RS512",
+                        x5c={
+                            ngx.encode_base64(der),
+                        } },
+                    payload={foo="bar", exp=9999999999}
+                }
+            )
+
+            local jwt_obj = jwt:verify(get_testcert("cert.pem"), jwt_token)
+            ngx.say(jwt_obj["verified"])
+            ngx.say(jwt_obj["reason"])
+            ngx.say(jwt_obj["payload"]["foo"])
+        ';
+    }
+--- request
+GET /t
+--- response_body
+true
+everything is awesome~ :p
+bar
+--- no_error_log
+[error]
+
+
+=== TEST 16: JWT sign and verify PS256
+--- http_config eval: $::HttpConfig
+--- config
+    location /t {
+        content_by_lua '
+            local jwt = require "resty.jwt"
+
+            local function get_testcert(name)
+                local f = io.open("/lua-resty-jwt/testcerts/" .. name)
+                local contents = f:read("*all")
+                f:close()
+                return contents
+            end
+
+            -- x5c wants a base64 encoded der, not pem.. aka, the pem minus the header+footer
+            local pubkey_pem = get_testcert("cert.pem")
+            local ssl = require "ngx.ssl"
+            local der, err = ssl.cert_pem_to_der(pubkey_pem)
+            local jwt_token = jwt:sign(
+                get_testcert("cert-key.pem"),
+                {
+                    header={
+                        typ="JWT",
+                        alg="PS256",
+                        x5c={
+                            ngx.encode_base64(der),
+                        } },
+                    payload={foo="bar", exp=9999999999}
+                }
+            )
+
+            local jwt_obj = jwt:verify(get_testcert("cert.pem"), jwt_token)
+            ngx.say(jwt_obj["verified"])
+            ngx.say(jwt_obj["reason"])
+            ngx.say(jwt_obj["payload"]["foo"])
+        ';
+    }
+--- request
+GET /t
+--- response_body
+true
+everything is awesome~ :p
+bar
+--- no_error_log
+[error]
+
+
+=== TEST 17: JWT sign and verify PS256 - Take 2
+--- http_config eval: $::HttpConfig
+--- config
+    location /t {
+        content_by_lua '
+            local jwt = require "resty.jwt"
+
+            local function get_testcert(name)
+                local f = io.open("/lua-resty-jwt/testcerts/" .. name)
+                local contents = f:read("*all")
+                f:close()
+                return contents
+            end
+
+            local function get_public_key(url, iss, kid)
+                if iss ~= "Authz" then
+                    error("No issuer. Duh :(")
+                end
+
+                if kid ~= "IamAPubl1cKeV" then
+                    error("No key identifier. Duh :(")
+                end
+
+                return get_testcert("cert.pem")
+            end
+
+            jwt:set_trusted_certs_file("/lua-resty-jwt/testcerts/root.pem")
+            jwt:set_alg_whitelist({ PS256 = 1 })
+            jwt:set_x5u_content_retriever(get_public_key)
+
+            local jwt_token = jwt:sign(
+                get_testcert("cert-key.pem"),
+                {
+                    header={
+                        typ="JWT",
+                        alg="PS256",
+                        x5u="https://dummy.com/certs",
+                        kid="IamAPubl1cKeV",
+                    },
+                    payload={foo="bar", iss="Authz", exp=9999999999}
+                }
+            )
+
+            local jwt_obj = jwt:verify(nil, jwt_token)
+            ngx.say(jwt_obj["verified"])
+            ngx.say(jwt_obj["reason"])
+            ngx.say(jwt_obj["payload"]["foo"])
+        ';
+    }
+--- request
+GET /t
+--- response_body
+true
+everything is awesome~ :p
+bar
+--- no_error_log
+[error]
+
+
+=== TEST 18: JWT sign and verify PS512
+--- http_config eval: $::HttpConfig
+--- config
+    location /t {
+        content_by_lua '
+            local jwt = require "resty.jwt"
+
+            local function get_testcert(name)
+                local f = io.open("/lua-resty-jwt/testcerts/" .. name)
+                local contents = f:read("*all")
+                f:close()
+                return contents
+            end
+
+            -- x5c wants a base64 encoded der, not pem.. aka, the pem minus the header+footer
+            local pubkey_pem = get_testcert("cert.pem")
+            local ssl = require "ngx.ssl"
+            local der, err = ssl.cert_pem_to_der(pubkey_pem)
+            local jwt_token = jwt:sign(
+                get_testcert("cert-key.pem"),
+                {
+                    header={
+                        typ="JWT",
+                        alg="PS512",
                         x5c={
                             ngx.encode_base64(der),
                         } },
