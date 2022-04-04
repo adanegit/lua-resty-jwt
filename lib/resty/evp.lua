@@ -324,7 +324,7 @@ local function _create_sign_verify_ctx(self, finit_ex, fint, md_alg)
     if self.padding then
         pkey_ctx = _C.EVP_PKEY_CTX_new(self.evp_pkey, nil)
         if pkey_ctx == nil then
-            return nil, "pkey:_create_padded_ctx EVP_PKEY_CTX_new()"
+            return nil, "pkey:_create_sign_verify_ctx EVP_PKEY_CTX_new()"
         end
         ffi_gc(pkey_ctx, _C.EVP_PKEY_CTX_free)
 
@@ -334,21 +334,21 @@ local function _create_sign_verify_ctx(self, finit_ex, fint, md_alg)
 
     local md_ctx = ctx_new()
     if md_ctx == nil then
-        return nil, "pkey:_create_padded_ctx: EVP_MD_CTX_new() failed"
+        return nil, "pkey:_create_sign_verify_ctx: EVP_MD_CTX_new() failed"
     end
     ctx_free(md_ctx)
 
     if finit_ex(md_ctx, md_alg, nil) ~= 1 then
-        return nil, "pkey:_create_padded_ctx: Init_ex() failed"
+        return nil, "pkey:_create_sign_verify_ctx: Init_ex() failed"
     end
 
     if fint(md_ctx, ppkey_ctx, md_alg, nil, self.evp_pkey) ~= 1 then
-        return nil, "pkey:_create_padded_ctx: Init failed"
+        return nil, "pkey:_create_sign_verify_ctx: Init failed"
     end
 
     if ppkey_ctx and self.padding == CONST.RSA_PKCS1_PSS_PADDING then
         if _C.EVP_PKEY_CTX_ctrl(ppkey_ctx[0], CONST.EVP_PKEY_RSA, -1, CONST.EVP_PKEY_CTRL_RSA_PADDING, self.padding, nil) <= 0 then
-            return nil, "pkey:_create_padded_ctx: EVP_PKEY_CTX_ctrl() failed"
+            return nil, "pkey:_create_sign_verify_ctx: EVP_PKEY_CTX_ctrl() failed"
         end
     end
 
